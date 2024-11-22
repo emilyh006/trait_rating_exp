@@ -8,7 +8,8 @@ date: "2024-11-20"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Loading necessary library
+#### Loading necessary library
+
 ```{r loading library}
 library(tidyverse)
 library(haven)
@@ -17,51 +18,65 @@ library(dplyr)
 library(pwr)
 library(effsize)
 ```
-## Data Processing 
 
-### PART 1: Create an empty data frame to hold all the data
+# Data Cleaning and Implementing Exclusion Criteria
+
+Exclusion Criteria:
+
+-   We will exclude a trial if it reponse time is shorter than 200ms or longer than 10,00ms
+-   We will exclude a block if ratings for all politicians in this block are the same or the number of trials get excluded in this block is more than 10%
+-   We will exclude a participant if their age is under 18 or their highest level of education completed is less than high school, or more than one block of their rating are excluded based on the block-wise exclusion criteria above.
+
+## 1. Creating initial dataframe
+
+### Establish file paths and list to access all the data
+
 ```{r}
 # Define the directory path and List all CSV files in the directory
-file_path <- "/Users/thwenwehan/Desktop/data/trait_rating/male_politician/Data_118_2missing"
+file_path <- "Data_118_2missing"
 file_list <- list.files(file_path, pattern = "\\.CSV$", full.names = TRUE)
 ```
 
+#### Exclude Participant According to Demographical Exclusion Criteria
+
+Iterating through each file to create a file list for initial data frame after excluding participants who do not meet the demographic criteria; their age is under 18 or their highest level of education completed is less than high school.
 
 ```{r}
-sam_dat <- read.table(file_list[1], header = FALSE, sep = ",", fill = TRUE, stringsAsFactors = FALSE)
-sam_dat1 <- sam_dat[-c(1:3,17,18),]
-```
-
-
-### Loop through each file and exclude demographic exclusion criteria
-```{r}
-big_dat_files <- character()  # Initialize as an empty character vector
-excluded_demog_count <- 0
+initial_dat_files <- character()  # Initialize as an empty character vector
+excluded_demog_count <- 0     # Counter for excluded participants
 
 
 for (file in file_list) {
   
   # Read the CSV file
-  initial_dat <- read.table(file, header = FALSE, sep = ",", fill = TRUE, stringsAsFactors = FALSE)
+  temp_dat <- read.table(file, header = FALSE, sep = ",", fill = TRUE, stringsAsFactors = FALSE)
   
   # Check exclusion criteria: Age under 18 or education level less than high school
-  if (initial_dat[18, 2] < 18 || initial_dat[18, 5] == 1) {
+  if (temp_dat[18, 2] < 18 || temp_dat[18, 5] == 1) {
+    
     # Increment the excluded count
     excluded_demog_count <- excluded_demog_count + 1
+    
   } else {
+    
     # Add the file to the included list
-    big_dat_files <- c(big_dat_files, file)
+    initial_dat_files <- c(initial_dat_files, file)
   }
 }
 
-# Print the count of excluded participants
+# Print summary of demographic exclusions
+cat("===== DEMOGRAPHIC EXCLUSIONS =====\n")
 cat("Number of excluded participants according to Age and Education Level:", excluded_demog_count, "\n")
 ```
-    
-### Loop through each file to create a meta data frame
+
+### Create an Initial Dataset
+
+Creates a cleaned and standardized dataset (initial_data) by: - Removing unnecessary rows and transposing the data. - Adding a unique identifier (ID) for each file. - Combining all processed files into a single dataset for further analysis.
+
 ```{r}
-big_data <- data.frame()
-for (file in big_dat_files) {
+
+initial_data <- data.frame()
+for (file in initial_dat_files) {
   
   # Read the CSV file
   dat <- read.table(file, header = FALSE, sep = ",", fill = TRUE, stringsAsFactors = FALSE)
@@ -75,7 +90,7 @@ for (file in big_dat_files) {
   # 3. Convert to a data frame and set the first row as column names
   transposed_data <- as.data.frame(transposed_data, stringsAsFactors = FALSE)
   colnames(transposed_data) <- transposed_data[1, ]  # Set first row as column names
-  transposed_data <- transposed_data[-2, ]  # Remove the first row after setting as header
+  transposed_data <- transposed_data[-1, ]  # Remove the first row after setting as header
   
   # 4. Add an "ID" column with the file name as the identifier
   file_name <- sub("\\.CSV$", "", basename(file))  # Extract file name without extension
@@ -84,17 +99,209 @@ for (file in big_dat_files) {
   # 5. Reorder to make "ID" the first column
   transposed_data <- transposed_data[, c(ncol(transposed_data), 1:(ncol(transposed_data) - 1))]
     
-  # 6. Append this data to the big dataset
-  big_data <- bind_rows(big_data, transposed_data)
+  # 6. Append this data to the initial dataset
+  initial_data <- bind_rows(initial_data, transposed_data)
 }
 
-
-# View the final bribe_data
-head(big_data)
+# Print the data structure
+cat("===== GLIMPSE OF DATA STRUCTURES =====\n")
+cat("initial dataframe:\n")
+glimpse(initial_data)
 ```
 
+## 2. Check for Block-Wise Exclusion Criteria
+
+In this section, we implement the block-wise exclusion criteria in regard to response time and lack of variance in rating (rating for all politicians on a certain block are the same)
+
+### Reshape Data Structure
+
+Standardizes the data structure and types to facilitate easier manipulation and block-wise analysis in downstream processes.
+
+```{r}
+#Modify the class of Rating and Response Time variables 
+initial_data <- initial_data %>%
+  mutate(across(ends_with("_RT") | ends_with("_Ratings"), as.numeric))
 
 
+# Reshape the data to make it easier to handle the trials blockwise 
+long_data <- initial_data %>%
+  pivot_longer(
+    cols = ends_with("_Ratings") | ends_with("_RT"),  # Select rating and response time columns
+    names_to = c("trait", "measure"),        # Split into 'Type' and 'Measure'
+    names_pattern = "(.*)_(Ratings|RT)",          # Extract 'Type' (Corruptible, Genuine, etc.) and 'Measure' (Ratings or RT)
+    values_to = "value"                           # Combine values into a single column
+  ) %>%
+  pivot_wider(
+    names_from = "measure",                         # Use 'Measure' (Ratings/RT) as column headers
+    values_from = "value"                           # Populate these new columns with values
+  )
+
+
+# Print the data structure 
+cat("===== GLIMPSE OF DATA STRUCTURES =====\n")
+cat("Full Data (long_data):\n")
+glimpse(long_data) 
+```
+
+### 2a: Check for Blocks with No Variance in Rating
+
+Check if there are any blocks where the ratings for all politicians are the same
+
+```{r}
+# Check for lack of variance in ratings
+variance_check <- long_data %>%
+  group_by(trait) %>%  # Group by trial type 
+  summarize(
+    Rating_Variance = var(Ratings, na.rm = TRUE)  # Calculate variance of ratings, ignoring NA
+  ) %>%
+  filter(Rating_Variance == 0 | is.na(Rating_Variance))  # Filter for blocks with zero or undefined variance
+
+# Print the blocks with no variance
+if (nrow(variance_check) > 0) {
+  cat("\n===== BLOCK VARIANCE CHECK =====\n")
+  cat("Blocks with no variance in ratings:\n")
+  print(variance_check)
+} else {
+  cat("\n===== BLOCK VARIANCE CHECK =====\n")
+  cat("All blocks have variance in ratings.\n")
+}
+```
+
+### 2b: Calculate Exclusions based on Unusally Response Time
+
+1.  Clean the dataset by replacing invalid Ratings values with NA based on unusual response times (RT).
+2.  Identify blocks and trials for exclusion based on the number of invalid trials; exclude the block if number of invalid trails exceeds 10%
+
+```{r}
+
+# Apply the conditions to replace ratings with NA based on respective unusual response times
+long_data <- long_data %>%
+  group_by(trait) %>%
+  mutate(
+    # Replace Ratings with NA only if RT is <200 or >10000
+    Ratings = ifelse(RT < 200 | RT > 10000, NA, Ratings)
+  ) 
+
+
+# Calculate exclusions and identify participants to exclude
+exclusion_summary <- long_data %>%
+  group_by(ID, trait) %>%
+  summarize(
+    # Count the number of trials with NA
+    Total_Excluded_Trials = sum(is.na(Ratings)),
+    
+    # Determine if the block is excluded for exceeding 
+    Total_Excluded_Block = Total_Excluded_Trials > 7
+  )
+
+# Print the count of excluded trials and blocks
+cat("\n===== EXCLUSION COUNTS =====\n")
+cat("Number of trials excluded for unusual response time:", sum(exclusion_summary$Total_Excluded_Trials), "\n")
+cat("Number of block excluded for having invalid trials for more than 10%:", sum(exclusion_summary$Total_Excluded_Block), "\n") 
+
+# Glimpse of exclusion_summary
+cat("\nFiltered Data (exclusion_summary):\n")
+glimpse(exclusion_summary)
+```
+
+#### Check whether if any participants is need to be excluded
+
+Identifies participants who need to be excluded for having more than 1 excluded block.
+
+```{r}
+# Summarize excluded blocks per participant
+excluded_block <- exclusion_summary %>%
+  group_by(ID) %>%  # Group by participant ID
+  summarize(
+    # Count the number of excluded blocks for each participant
+    Excluded_Blocks = sum(Total_Excluded_Block)
+  )
+
+
+excluded_participants <- excluded_block %>%
+  filter(Excluded_Blocks > 1) %>%  # Filter participants with more than 1 excluded block
+  pull(ID)  # Extract the IDs of excluded participants
+
+
+# Print the count of participant exclusion
+cat("\n===== PARTICIPANT EXCLUSION COUNTS =====\n")
+cat("Number of participants excluded for having more than one block excluded:", length(excluded_participants), "\n")
+```
+
+### 2c: Implement Block Exclusions and Trial Exclusion
+
+```{r}
+# Filter excluded blocks
+excluded_block_stats <- exclusion_summary %>%
+  filter(Total_Excluded_Block == TRUE) %>%  # Keep only rows where the block was excluded
+  select(ID, trait, Total_Excluded_Trials)  # Select relevant columns for clarity
+
+# Print the information for removed block
+excluded_block_stats
+
+# Create a new dataset after excluding the block
+dropping_block <- long_data %>%
+  left_join(exclusion_summary, by = c("ID", "trait")) %>%
+  filter(!Total_Excluded_Block) %>%  # Remove all trials from excluded blocks
+  select(-Total_Excluded_Trials, -Total_Excluded_Block)
+  
+# Create the final clean dataset after excluding invalid trials aside from excluded blocks
+clean_data <- dropping_block %>%
+  filter(!is.na(Ratings))
+
+
+
+# Print the structure of the final cleaned dataset
+cat("\n===== FINAL CLEAN DATA =====\n")
+glimpse(clean_data)
+
+```
+
+# Data analysis
+
+### 1. Data Preparation: Adding Binary Indicator for Corruption Record
+
+Adds a binary column (male_record) to indicate whether the male politician has clean record for corruption(0) or not (1).
+
+\*note: data reorganization and aesthetic changes are just based on personal preference
+
+```{r}
+# Define list of clean male politicians
+# This list contains filenames of male politician images considered to have clean records
+
+clean_male_images <- c(
+  '1John_Katko.jpg', '2Ken_Smith.jpg', '3Darrell_lssa.jpg', '4Louis_Terhar.jpg',
+  '5Tuggle_Mark.jpg', '6Brown_KL.jpg', '7Bill_Poole.jpg', '8Noel_W_Campbell.JPG',
+  '9Bill_Gwatney.jpg', '10Scheffel_Mark.jpg', '11Daniel_Kagan.jpg', '12Frantz_Scott.jpg',
+  '13Steven_Sodders.jpg', '14Fitz_Steele.jpg', '15Harold_Naughton.jpg', '16Jon_Sesso.jpg',
+  '17Michael_Ranzenhofer.jpg', '18Brian_Crain.jpg', '19Warren_Kampf.jpg', '20Jeffrey_Bradley.jpg',
+  '21Bruce_Bannister.jpg', '22Sanderson_Bill.jpg', '23Scott_Rigell.jpg', '24Dan_Ortiz.jpg',
+  '25Matt_Claman.jpg', '26Dennis_Egan.jpg', '27Joseph_Lagana.jpg', '28Richard_Codey.jpg',
+  '29Thomas_Abinanti.jpg', '30Stephen_Ross.jpg', '31Tim_Hennessey.jpg', '32Kevin _Schreiber.jpg',
+  '33Charles_McIlhinney.jpg', '34Niceley_Frank.jpg', '35Frank_Garner.jpg', '36Neil_D_Breslin.jpg'
+)
+
+
+# Rename column names to lowercase (personal preference)
+dat <- clean_data %>%
+  rename_with(tolower)
+
+
+# Add binary columns for corruption record
+dat <- dat %>%
+  mutate(
+    # 0 for clean politicians in `Male_Images`, 1 otherwise
+    male_record = ifelse(male_politician_image %in% clean_male_images, 0, 1))
+
+
+# Reorder the columns for better organization and easier readability (personal preference)
+dat <- dat %>%
+  select(id, male_politician_image, male_record, trait, ratings, rt, corruptible_imageorder, genuine_imageorder, attractive_imageorder, dominant_imageorder)
+
+
+# Inspect the updated data
+head(dat)
+```
 
 ## Including Plots
 
