@@ -256,7 +256,6 @@ cat("\n===== FINAL CLEAN DATA =====\n")
 glimpse(clean_data)
 
 ```
-
 # Data analysis
 
 ### 1. Data Preparation: Adding Binary Indicator for Corruption Record
@@ -291,17 +290,265 @@ dat <- clean_data %>%
 dat <- dat %>%
   mutate(
     # 0 for clean politicians in `Male_Images`, 1 otherwise
-    male_record = ifelse(male_politician_image %in% clean_male_images, 0, 1))
+    corruption_record = ifelse(male_politician_image %in% clean_male_images, 0, 1))
 
 
 # Reorder the columns for better organization and easier readability (personal preference)
 dat <- dat %>%
-  select(id, male_politician_image, male_record, trait, ratings, rt, corruptible_imageorder, genuine_imageorder, attractive_imageorder, dominant_imageorder)
+  select(id, male_politician_image, corruption_record, trait, ratings, rt, corruptible_imageorder, genuine_imageorder, attractive_imageorder, dominant_imageorder)
 
 
 # Inspect the updated data
-head(dat)
+glimpse(dat)
 ```
+
+
+### 2. Testings for H1a
+
+To test H1a, we will conduct an aggregate-level t-test for the rating of corruptibility. We will first compute the average corruptibility rating for a given politician across all participants. We will then test whether politicians with corruption records are rated more
+corruptible on average than politicians with clean records using a two-sample one-sided t-test.
+
+#### Compute the average trait ratings for a given politician across all participants
+```{r}
+
+#Compute the average rating for different each politician
+avg_ratings_across_politician <- dat%>%
+    group_by(male_politician_image, corruption_record, trait) %>%  
+    summarize(
+      avg_rating = mean(ratings, na.rm = TRUE),  # Compute mean rating
+      .groups = "drop"
+    )
+
+```
+
+
+#### Perform two-sample one-sided t-test
+
+Write a function that allows you to perform the t-test between groups (clean vs corrupted politician) depending on specific trait with their effect size, and power analysis. 
+
+```{r}
+```
+
+
+```{r}
+# Function to analyze ratings for a specified trait
+analyze_trait <- function(trait_type) {
+  
+  # Step 1: Filter rows by the specified trait
+  trait_specific_data <- avg_ratings_across_politician %>%
+    filter(trait == trait_type)  # Assume 'trait' is the column for traits
+  
+  
+  # Step 2: Perform a two-sample one-sided t-test
+  t_test_result <- t.test(
+    avg_rating ~ corruption_record,  # Compare average ratings by corruption record
+    data = trait_specific_data,
+    alternative = "less"  # One-sided test: Corruption record > Clean record
+  )
+  
+  # Step 3: Calculate effect size
+  # Split the data into two groups: corrupt and clean
+  corrupt_ratings <- trait_specific_data %>%
+    filter(corruption_record == 1) %>%
+    pull(avg_rating)
+  clean_ratings <- trait_specific_data %>%
+    filter(corruption_record == 0) %>%
+    pull(avg_rating)
+
+  
+  # Step 5: Output results
+  cat("\n===== T-TEST RESULTS FOR TRAIT:", trait_type, "=====\n")
+  print(t_test_result)
+
+  
+}
+```
+
+
+```{r}
+# Function to analyze ratings for a specified trait
+analyze_trait1 <- function(trait_type) {
+  
+  # Step 1: Filter rows by the specified trait
+  trait_specific_data <- avg_ratings_across_politician %>%
+    filter(trait == trait_type)  # Assume 'trait' is the column for traits
+  
+  
+  # Step 2: Perform a two-sample one-sided t-test
+  t_test_result <- t.test(
+    avg_rating ~ corruption_record,  # Compare average ratings by corruption record
+    data = trait_specific_data,
+    alternative = "greater"  # One-sided test: Corruption record > Clean record
+  )
+  
+  # Step 3: Calculate effect size
+  # Split the data into two groups: corrupt and clean
+  corrupt_ratings <- trait_specific_data %>%
+    filter(corruption_record == 1) %>%
+    pull(avg_rating)
+  clean_ratings <- trait_specific_data %>%
+    filter(corruption_record == 0) %>%
+    pull(avg_rating)
+  
+  # Step 5: Output results
+  cat("\n===== T-TEST RESULTS FOR TRAIT:", trait_type, "=====\n")
+  print(t_test_result)
+
+  
+}
+```
+
+
+#### Analysis results
+```{r}
+
+#make sure alernative is less 
+corruptible_result <- analyze_trait("Corruptible") 
+
+genuine_result <- analyze_trait1("Genuine")
+
+
+attractive_result <- analyze_trait1("Attractive")
+dominant_result <- analyze_trait("Dominant")
+```
+
+### 2. Testings for H1b
+
+To test H1b, we will conduct an aggregate-level logistic regression. We will first compute the average corruptibility rating for a given politician across all participants. We will then regress the politicians’ records (corrupt or clean) on their average corruptibility ratings while controlling for photo characteristics that may influence corruptibility perception such as the politician’s age, image clarity, image sources, smile intensity, with or without glasses and jewelry, and hair and clothing colors, etc.
+
+```{r}
+#Loading library for regression model 
+library(minqa)
+library(nloptr)
+library(RcppEigen)
+library(lme4)
+```
+
+
+#### Data Prepration for Regression Model
+```{r}
+
+# Load the CSV file containing photo characteristics information into a data frame
+male_info_data = read.csv("male.csv")
+
+
+# Standardize the index columns of both dataframe:
+avg_ratings_across_politician <- avg_ratings_across_politician %>%
+  mutate(
+    male_politician_image = str_trim(tolower(male_politician_image)),
+    male_politician_image = gsub("\\.png$", ".jpg", male_politician_image)
+    )
+male_info_data <- male_info_data %>%
+  mutate(
+    image_name = str_trim(tolower(image_name)),
+    image_name = gsub("\\.png$", ".jpg", image_name)
+    )
+
+
+# Perform a left join to combine `avg_ratings_across_politician` with `male_info_data`
+merged_data <- left_join(
+  avg_ratings_across_politician,
+  male_info_data,
+  by = c("male_politician_image" = "image_name")
+)
+
+# Identify rows in `avg_ratings_across_politician` that did not find a match
+unmatched_rows <- anti_join(
+  avg_ratings_across_politician,
+  male_info_data,
+  by = c("male_politician_image" = "image_name")
+)
+
+head(merged_data)
+glimpse(merged_data)
+
+```
+
+
+
+```{r}
+# Function to perform logistic regression for a specific trait
+```
+
+
+```{r}
+run_regression <- function(trait) {
+  
+  # Filter the dataset for the specified trait
+  data_filtered <- merged_data %>%
+    filter(trait == !!trait)  # Filter rows where `trait` matches the input
+  
+  
+  # Fit the logistic regression model
+  model <- glm(corruption_record ~ avg_rating + age + glasses + beard + mustache + pixels 
+               + AU06 + AU12 + happiness, data = data_filtered, family = "binomial")
+  
+  # ask Yufei what about color of hair and clothing, as well as the source of the photos (whether source is used in female politicians)
+  
+  # Return the model summary
+  cat("\n===== MODEL SUMMARY FOR TRAIT:", trait, "=====\n")
+  print(summary(model))
+}
+```
+
+
+```{r}
+
+  # Fit the logistic regression model
+  model <- glm(corruption_record ~ avg_rating + trait + age + glasses + beard + mustache + pixels 
+               + AU06 + AU12 + happiness, data = merged_data, family = "binomial")
+  
+  print(summary(model))
+}
+
+
+```
+
+
+#### Model results
+```{r}
+corruptible_model <- run_regression("Corruptible")
+genuine_result <- run_regression("Genuine")
+ attractive_result <- run_regression("Attractive")
+ dominant_result <- run_regression("Dominant")
+
+
+
+
+```
+
+
+```{r}
+wide_data <- merged_data %>%
+  pivot_wider(
+    names_from = trait,      # Create new columns from `trait`
+    values_from = avg_rating # Fill these columns with `avg_rating`
+  )
+```
+
+
+```{r}
+print(dim(wide_data))
+head(wide_data)
+```
+
+
+```{r}
+
+  # Fit the logistic regression model
+  #model <- glm(corruption_record ~Attractive+ Corruptible+ Dominant+Genuine + age + glasses + beard + mustache + pixels 
+   #            + AU06 + AU12 + happiness, data = wide_data, family = "binomial")
+
+print(cor.test(wide_data$Corruptible,wide_data$Attractive))
+print(cor.test(wide_data$Corruptible,wide_data$Dominant))
+print(cor.test(wide_data$Corruptible,wide_data$Genuine))
+
+  
+```
+```{r}
+wide_data[1,14]+1
+```
+
 
 ## Including Plots
 
@@ -312,3 +559,13 @@ plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+
+
+
+
+
+
+
