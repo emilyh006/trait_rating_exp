@@ -1,4 +1,4 @@
----
+ ---
 title: "pilot.analysis"
 output: html_document
 date: "2024-11-20"
@@ -33,7 +33,7 @@ Exclusion Criteria:
 
 ```{r}
 # Define the directory path and List all CSV files in the directory
-file_path <- "Data_118_2missing"
+file_path <- "Data_118_120collected"
 file_list <- list.files(file_path, pattern = "\\.CSV$", full.names = TRUE)
 ```
 
@@ -327,106 +327,6 @@ avg_ratings <- dat %>%
 
 ```
 
-#### Perform two-sample one-sided t-test
-
-Write a function that allows you to perform the t-test between groups (clean vs corrupted politician) depending on specific trait with their effect size, and power analysis.
-
-```{r}
-```
-
-```{r}
-# Function to analyze ratings for a specified trait
-analyze_trait <- function(trait_type) {
-  
-  # Step 1: Filter rows by the specified trait
-  trait_specific_data <- avg_ratings_across_politician %>%
-    filter(trait == trait_type)  # Assume 'trait' is the column for traits
-  
-  
-  # Step 2: Perform a two-sample one-sided t-test
-  t_test_result <- t.test(
-    avg_rating ~ corruption_record,  # Compare average ratings by corruption record
-    data = trait_specific_data,
-    alternative = "less"  # One-sided test: Corruption record > Clean record
-  )
-  
-  # Step 3: Calculate effect size
-  # Split the data into two groups: corrupt and clean
-  corrupt_ratings <- trait_specific_data %>%
-    filter(corruption_record == 1) %>%
-    pull(avg_rating)
-  clean_ratings <- trait_specific_data %>%
-    filter(corruption_record == 0) %>%
-    pull(avg_rating)
-
-  
-  # Step 5: Output results
-  cat("\n===== T-TEST RESULTS FOR TRAIT:", trait_type, "=====\n")
-  print(t_test_result)
-
-  
-}
-```
-
-```{r}
-# Function to analyze ratings for a specified trait
-analyze_trait1 <- function(trait_type) {
-  
-  # Step 1: Filter rows by the specified trait
-  trait_specific_data <- avg_ratings_across_politician %>%
-    filter(trait == trait_type)  # Assume 'trait' is the column for traits
-  
-  
-  # Step 2: Perform a two-sample one-sided t-test
-  t_test_result <- t.test(
-    avg_rating ~ corruption_record,  # Compare average ratings by corruption record
-    data = trait_specific_data,
-    alternative = "greater"  # One-sided test: Corruption record > Clean record
-  )
-  
-  # Step 3: Calculate effect size
-  # Split the data into two groups: corrupt and clean
-  corrupt_ratings <- trait_specific_data %>%
-    filter(corruption_record == 1) %>%
-    pull(avg_rating)
-  clean_ratings <- trait_specific_data %>%
-    filter(corruption_record == 0) %>%
-    pull(avg_rating)
-  
-  # Step 5: Output results
-  cat("\n===== T-TEST RESULTS FOR TRAIT:", trait_type, "=====\n")
-  print(t_test_result)
-
-  
-}
-```
-
-#### Analysis results
-
-```{r}
-
-#make sure alernative is less 
-corruptible_result <- analyze_trait("Corruptible") 
-
-genuine_result <- analyze_trait1("Genuine")
-
-
-attractive_result <- analyze_trait1("Attractive")
-dominant_result <- analyze_trait("Dominant")
-```
-
-### 2. Testings for H1b
-
-To test H1b, we will conduct an aggregate-level logistic regression. We will first compute the average corruptibility rating for a given politician across all participants. We will then regress the politicians’ records (corrupt or clean) on their average corruptibility ratings while controlling for photo characteristics that may influence corruptibility perception such as the politician’s age, image clarity, image sources, smile intensity, with or without glasses and jewelry, and hair and clothing colors, etc.
-
-```{r}
-#Loading library for regression model 
-library(minqa)
-library(nloptr)
-library(RcppEigen)
-library(lme4)
-```
-
 #### Data Prepration for Regression Model
 
 ```{r}
@@ -481,8 +381,8 @@ merged_data <- merged_data %>% select(-photo_source)
 merged_data <- merged_data %>% select(image, male_politician_image, convicted, Corruptible, Genuine, Attractive, Dominant, everything())
 
 # Write the resulting dataframe to a CSV file
-write.csv(merged_data, "cleaned.csv", row.names = FALSE)
+write.csv(merged_data, "eu_cleaned.csv", row.names = FALSE)
 
-
+```
 
 

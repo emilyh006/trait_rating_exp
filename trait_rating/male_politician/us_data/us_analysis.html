@@ -10,9 +10,9 @@
 
 
 
-<meta name="date" content="2024-11-27" />
+<meta name="date" content="2024-12-02" />
 
-<title>h1a_h1c_analysis</title>
+<title>US Participant Analysis</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -349,8 +349,8 @@ display: none;
 
 
 
-<h1 class="title toc-ignore">h1a_h1c_analysis</h1>
-<h4 class="date">2024-11-27</h4>
+<h1 class="title toc-ignore">US Participant Analysis</h1>
+<h4 class="date">2024-12-02</h4>
 
 </div>
 
@@ -381,16 +381,8 @@ features of the photos that may influence corruptibility perception.</p>
 records will be significant for corruptibility-related traits (e.g.,
 corruptible, genuine) but not for corruptibility-unrelated traits (e.g.,
 attractiveness).</p>
-</div>
-</div>
-<div id="focus" class="section level2">
-<h2>Focus</h2>
-<p>This analysis report will include the analysis for H1a and parts of
-H1c. Since H1c builds upon H1a by extending the t-test analysis to
-related (Genuine) and unrelated traits (Attractive &amp; Dominant), we
-will include the relevant analysis and tests of H1c together with H1a in
-this report to avoid redundancy.</p>
 <hr />
+</div>
 </div>
 </div>
 <div id="testings-for-h1a" class="section level1">
@@ -414,7 +406,24 @@ library(tidyverse)</code></pre>
 ## ✖ dplyr::filter() masks stats::filter()
 ## ✖ dplyr::lag()    masks stats::lag()
 ## ℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
-<pre class="r"><code>library(dplyr)</code></pre>
+<pre class="r"><code>library(dplyr)
+library(minqa)
+library(nloptr)</code></pre>
+<pre><code>## 
+## Attaching package: &#39;nloptr&#39;
+## 
+## The following objects are masked from &#39;package:minqa&#39;:
+## 
+##     bobyqa, newuoa</code></pre>
+<pre class="r"><code>library(RcppEigen)
+library(lme4)</code></pre>
+<pre><code>## Loading required package: Matrix
+## 
+## Attaching package: &#39;Matrix&#39;
+## 
+## The following objects are masked from &#39;package:tidyr&#39;:
+## 
+##     expand, pack, unpack</code></pre>
 <pre class="r"><code>#Load the clean data set
 
 dat &lt;- read.csv(&quot;cleaned.csv&quot;)</code></pre>
@@ -437,7 +446,10 @@ whether the politician has a corruption record:
 <strong><code>Dominant</code></strong>: Numeric values reflecting the
 average trait ratings for each politician across every
 participants.</li>
-<li>The rest of the variables are not applicable for H1a analysis.</li>
+<li><strong><code>wiki</code></strong>,
+<strong><code>gov</code></strong>, <strong><code>news</code></strong>:
+Binary variables indicating the sources of the stimuli/images of the
+politicians</li>
 </ul>
 <hr />
 <div id="summary-of-the-dataset" class="section level2">
@@ -516,6 +528,24 @@ summary(dat)</code></pre>
 ##  Mean   :0.8961   Mean   :16.140   Mean   :15.766   Mean   :16.576  
 ##  3rd Qu.:0.9560   3rd Qu.:19.413   3rd Qu.:18.566   3rd Qu.:19.631  
 ##  Max.   :0.9832   Max.   :28.711   Max.   :29.130   Max.   :32.992</code></pre>
+</div>
+<div id="function-definition-analyze_trait" class="section level2">
+<h2>Function Definition:
+<strong><code>analyze_trait</code></strong></h2>
+<p>We define a function <code>analyze_trait</code> to:</p>
+<ul>
+<li>Compute t-tests for specified traits.</li>
+<li>Dynamically handle the direction of the alternative hypothesis:
+<ul>
+<li>For traits <strong>Corruptibility</strong> and
+<strong>Dominant</strong>, we test whether <span class="math inline">\(x\)</span> (corrupted) &gt; <span class="math inline">\(y\)</span> (clean) (the alternative hypothesis
+will be <code>&quot;greater&quot;</code>).</li>
+<li>For traits <strong>Genuine</strong> and <strong>Attractive</strong>,
+we test whether <span class="math inline">\(y\)</span> (clean) &gt;
+<span class="math inline">\(x\)</span> (corrupted) (the alternative
+hypothesis will be <code>&quot;less&quot;</code>).</li>
+</ul></li>
+</ul>
 <pre class="r"><code>analyze_trait &lt;- function(trait_type) {
   
   # Step 1: Create explicit groups for the t-test
@@ -537,8 +567,9 @@ summary(dat)</code></pre>
   print(t_test_result)
 }</code></pre>
 </div>
-<div id="h1a-result" class="section level2">
-<h2>H1a: Result</h2>
+</div>
+<div id="h1a-corruptibility" class="section level1">
+<h1>H1a: Corruptibility</h1>
 <pre class="r"><code>corruptible_t_test &lt;- analyze_trait(&quot;Corruptible&quot;)</code></pre>
 <pre><code>## 
 ## ===== T-TEST RESULTS FOR TRAIT: Corruptible =====
@@ -553,7 +584,6 @@ summary(dat)</code></pre>
 ## sample estimates:
 ## mean of x mean of y 
 ##  4.373294  4.050171</code></pre>
-</div>
 </div>
 <div id="h1c-testing-for-other-traits" class="section level1">
 <h1>H1c: Testing for Other Traits</h1>
@@ -607,6 +637,245 @@ summary(dat)</code></pre>
 ## sample estimates:
 ## mean of x mean of y 
 ##  4.049579  3.860886</code></pre>
+</div>
+</div>
+<div id="testings-for-h1b" class="section level1">
+<h1>Testings for H1b</h1>
+<p>To test H1b, we will conduct an aggregate-level logistic regression.
+The cleaned data will include the average rating of all four traits for
+a given politician across all participants. We will regress the
+politicians’ records (corrupt or clean) on their average corruptibility
+ratings while controlling for photo characteristics that may influence
+corruptibility perception such as the politician’s age, image clarity,
+image sources, smile intensity, with or without glasses and jewelry, and
+hair and clothing colors, etc.</p>
+<div id="function-definition-run_regression" class="section level2">
+<h2>Function Definition:
+<strong><code>run_regression</code></strong></h2>
+<p>We define a function <code>run_regression</code> to:</p>
+<ul>
+<li>Compute t-tests for specified traits.</li>
+<li>Dynamically handle the trait type for the regression formula</li>
+</ul>
+<pre class="r"><code>run_regression &lt;- function(trait) {
+  
+  # Dynamically add the trait column to the model
+  formula &lt;- as.formula(paste(&quot;convicted ~&quot;, trait, &quot;+ wiki + gov + news + age + glasses + beard + mustache + 
+                               hair_blond + hair_white + hair_black + hair_brown + pixels + AU06 + AU12 + 
+                               clothing_r + clothing_g + clothing_b&quot;))
+  
+  # Fit the logistic regression model
+  model &lt;- glm(formula, data = dat, family = &quot;binomial&quot;)
+
+  # Return the model summary
+  cat(&quot;\n===== MODEL SUMMARY FOR TRAIT:&quot;, trait, &quot;=====\n&quot;)
+  print(summary(model))
+}</code></pre>
+</div>
+</div>
+<div id="h1b-regression-for-corruptibility" class="section level1">
+<h1>H1b: Regression for Corruptibility</h1>
+<pre class="r"><code>corruptible_model &lt;- run_regression(&quot;Corruptible&quot;)</code></pre>
+<pre><code>## 
+## ===== MODEL SUMMARY FOR TRAIT: Corruptible =====
+## 
+## Call:
+## glm(formula = formula, family = &quot;binomial&quot;, data = dat)
+## 
+## Coefficients: (1 not defined because of singularities)
+##               Estimate Std. Error z value Pr(&gt;|z|)   
+## (Intercept) -1.972e+01  1.022e+01  -1.930   0.0537 . 
+## Corruptible  5.685e+00  1.986e+00   2.863   0.0042 **
+## wiki        -3.784e+00  1.832e+00  -2.065   0.0389 * 
+## gov         -1.117e-01  1.020e+00  -0.110   0.9128   
+## news                NA         NA      NA       NA   
+## age          6.354e-02  5.519e-02   1.151   0.2496   
+## glasses      7.135e-01  1.194e+00   0.597   0.5502   
+## beard       -1.568e+01  2.020e+03  -0.008   0.9938   
+## mustache     2.227e+01  2.020e+03   0.011   0.9912   
+## hair_blond   4.661e-01  9.120e-01   0.511   0.6093   
+## hair_white  -1.181e+00  8.161e-01  -1.447   0.1479   
+## hair_black   2.303e-01  6.163e-01   0.374   0.7086   
+## hair_brown   5.727e-01  6.067e-01   0.944   0.3452   
+## pixels       1.580e-06  9.622e-07   1.642   0.1006   
+## AU06         1.231e+01  9.436e+00   1.304   0.1922   
+## AU12        -1.983e+01  1.291e+01  -1.536   0.1245   
+## clothing_r  -5.183e-02  3.825e-01  -0.135   0.8922   
+## clothing_g   3.622e-01  5.817e-01   0.623   0.5335   
+## clothing_b  -3.741e-01  2.954e-01  -1.266   0.2053   
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 99.813  on 71  degrees of freedom
+## Residual deviance: 49.759  on 54  degrees of freedom
+## AIC: 85.759
+## 
+## Number of Fisher Scoring iterations: 17</code></pre>
+</div>
+<div id="h1c-regression-for-other-traits" class="section level1">
+<h1>H1c: Regression for Other Traits</h1>
+<div id="genuine-1" class="section level2">
+<h2>Genuine</h2>
+<pre class="r"><code>genuine_result &lt;- run_regression(&quot;Genuine&quot;)</code></pre>
+<pre><code>## 
+## ===== MODEL SUMMARY FOR TRAIT: Genuine =====
+## 
+## Call:
+## glm(formula = formula, family = &quot;binomial&quot;, data = dat)
+## 
+## Coefficients: (1 not defined because of singularities)
+##               Estimate Std. Error z value Pr(&gt;|z|)   
+## (Intercept)  1.635e+01  7.654e+00   2.136  0.03265 * 
+## Genuine     -3.792e+00  1.466e+00  -2.585  0.00972 **
+## wiki        -3.461e+00  1.650e+00  -2.098  0.03592 * 
+## gov         -1.804e-01  9.357e-01  -0.193  0.84713   
+## news                NA         NA      NA       NA   
+## age          9.286e-02  5.064e-02   1.834  0.06669 . 
+## glasses      9.773e-03  1.027e+00   0.010  0.99240   
+## beard       -1.738e+01  2.013e+03  -0.009  0.99311   
+## mustache     2.180e+01  2.013e+03   0.011  0.99136   
+## hair_blond   3.443e-01  8.845e-01   0.389  0.69710   
+## hair_white  -1.045e+00  7.130e-01  -1.465  0.14288   
+## hair_black   1.113e-01  5.671e-01   0.196  0.84442   
+## hair_brown   3.189e-01  5.704e-01   0.559  0.57616   
+## pixels       1.711e-06  9.681e-07   1.768  0.07712 . 
+## AU06         1.372e+01  8.795e+00   1.560  0.11878   
+## AU12        -2.096e+01  1.155e+01  -1.814  0.06961 . 
+## clothing_r   3.415e-02  3.505e-01   0.097  0.92238   
+## clothing_g   1.974e-01  5.367e-01   0.368  0.71306   
+## clothing_b  -3.154e-01  2.837e-01  -1.112  0.26622   
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 99.813  on 71  degrees of freedom
+## Residual deviance: 54.829  on 54  degrees of freedom
+## AIC: 90.829
+## 
+## Number of Fisher Scoring iterations: 17</code></pre>
+</div>
+<div id="attractive-1" class="section level2">
+<h2>Attractive</h2>
+<pre class="r"><code>attractive_result &lt;- run_regression(&quot;Attractive&quot;)</code></pre>
+<pre><code>## 
+## ===== MODEL SUMMARY FOR TRAIT: Attractive =====
+## 
+## Call:
+## glm(formula = formula, family = &quot;binomial&quot;, data = dat)
+## 
+## Coefficients: (1 not defined because of singularities)
+##               Estimate Std. Error z value Pr(&gt;|z|)  
+## (Intercept)  1.267e+01  7.157e+00   1.770   0.0768 .
+## Attractive  -1.700e+00  8.931e-01  -1.903   0.0570 .
+## wiki        -2.656e+00  1.504e+00  -1.766   0.0774 .
+## gov          1.590e-01  8.815e-01   0.180   0.8568  
+## news                NA         NA      NA       NA  
+## age          6.109e-02  5.189e-02   1.177   0.2391  
+## glasses      8.593e-02  9.407e-01   0.091   0.9272  
+## beard       -1.753e+01  2.026e+03  -0.009   0.9931  
+## mustache     2.136e+01  2.026e+03   0.011   0.9916  
+## hair_blond   5.070e-01  9.020e-01   0.562   0.5740  
+## hair_white  -9.687e-01  6.671e-01  -1.452   0.1465  
+## hair_black   2.039e-01  5.581e-01   0.365   0.7148  
+## hair_brown   3.162e-01  5.632e-01   0.562   0.5744  
+## pixels       1.196e-06  8.867e-07   1.349   0.1773  
+## AU06         1.273e+01  8.483e+00   1.500   0.1336  
+## AU12        -2.349e+01  1.106e+01  -2.123   0.0338 *
+## clothing_r  -1.110e-02  3.359e-01  -0.033   0.9736  
+## clothing_g   2.349e-01  5.335e-01   0.440   0.6597  
+## clothing_b  -3.166e-01  2.879e-01  -1.099   0.2716  
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 99.813  on 71  degrees of freedom
+## Residual deviance: 59.522  on 54  degrees of freedom
+## AIC: 95.522
+## 
+## Number of Fisher Scoring iterations: 17</code></pre>
+</div>
+<div id="dominant-1" class="section level2">
+<h2>Dominant</h2>
+<pre class="r"><code>dominant_result &lt;- run_regression(&quot;Dominant&quot;)</code></pre>
+<pre><code>## 
+## ===== MODEL SUMMARY FOR TRAIT: Dominant =====
+## 
+## Call:
+## glm(formula = formula, family = &quot;binomial&quot;, data = dat)
+## 
+## Coefficients: (1 not defined because of singularities)
+##               Estimate Std. Error z value Pr(&gt;|z|)  
+## (Intercept) -1.210e-01  7.278e+00  -0.017   0.9867  
+## Dominant     1.023e+00  9.301e-01   1.100   0.2713  
+## wiki        -3.041e+00  1.474e+00  -2.064   0.0391 *
+## gov          1.336e-01  8.630e-01   0.155   0.8769  
+## news                NA         NA      NA       NA  
+## age          9.637e-02  4.809e-02   2.004   0.0451 *
+## glasses      5.127e-01  9.116e-01   0.562   0.5738  
+## beard       -1.702e+01  2.120e+03  -0.008   0.9936  
+## mustache     2.022e+01  2.120e+03   0.010   0.9924  
+## hair_blond   5.019e-02  8.694e-01   0.058   0.9540  
+## hair_white  -1.046e+00  6.435e-01  -1.625   0.1041  
+## hair_black  -6.215e-02  5.215e-01  -0.119   0.9051  
+## hair_brown   9.620e-02  5.387e-01   0.179   0.8583  
+## pixels       1.029e-06  9.024e-07   1.140   0.2543  
+## AU06         1.073e+01  8.574e+00   1.251   0.2110  
+## AU12        -1.988e+01  1.160e+01  -1.714   0.0865 .
+## clothing_r  -1.858e-02  3.206e-01  -0.058   0.9538  
+## clothing_g   2.926e-01  4.883e-01   0.599   0.5489  
+## clothing_b  -3.193e-01  2.556e-01  -1.249   0.2116  
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 99.813  on 71  degrees of freedom
+## Residual deviance: 62.108  on 54  degrees of freedom
+## AIC: 98.108
+## 
+## Number of Fisher Scoring iterations: 17</code></pre>
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>## R version 4.4.2 (2024-10-31)
+## Platform: x86_64-apple-darwin20
+## Running under: macOS Ventura 13.7.1
+## 
+## Matrix products: default
+## BLAS:   /Library/Frameworks/R.framework/Versions/4.4-x86_64/Resources/lib/libRblas.0.dylib 
+## LAPACK: /Library/Frameworks/R.framework/Versions/4.4-x86_64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.0
+## 
+## locale:
+## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+## 
+## time zone: America/Los_Angeles
+## tzcode source: internal
+## 
+## attached base packages:
+## [1] stats     graphics  grDevices utils     datasets  methods   base     
+## 
+## other attached packages:
+##  [1] lme4_1.1-35.5       Matrix_1.7-1        RcppEigen_0.3.4.0.2
+##  [4] nloptr_2.1.1        minqa_1.2.8         lubridate_1.9.3    
+##  [7] forcats_1.0.0       stringr_1.5.1       dplyr_1.1.4        
+## [10] purrr_1.0.2         readr_2.1.5         tidyr_1.3.1        
+## [13] tibble_3.2.1        ggplot2_3.5.1       tidyverse_2.0.0    
+## 
+## loaded via a namespace (and not attached):
+##  [1] sass_0.4.9        utf8_1.2.4        generics_0.1.3    stringi_1.8.4    
+##  [5] lattice_0.22-6    hms_1.1.3         digest_0.6.37     magrittr_2.0.3   
+##  [9] evaluate_1.0.1    grid_4.4.2        timechange_0.3.0  fastmap_1.2.0    
+## [13] jsonlite_1.8.9    fansi_1.0.6       scales_1.3.0      jquerylib_0.1.4  
+## [17] cli_3.6.3         rlang_1.1.4       munsell_0.5.1     splines_4.4.2    
+## [21] withr_3.0.1       cachem_1.1.0      yaml_2.3.10       tools_4.4.2      
+## [25] tzdb_0.4.0        colorspace_2.1-1  boot_1.3-31       vctrs_0.6.5      
+## [29] R6_2.5.1          lifecycle_1.0.4   MASS_7.3-61       pkgconfig_2.0.3  
+## [33] pillar_1.9.0      bslib_0.8.0       gtable_0.3.6      glue_1.8.0       
+## [37] Rcpp_1.0.13       xfun_0.48         tidyselect_1.2.1  rstudioapi_0.17.1
+## [41] knitr_1.48        nlme_3.1-166      htmltools_0.5.8.1 rmarkdown_2.28   
+## [45] compiler_4.4.2</code></pre>
 </div>
 </div>
 

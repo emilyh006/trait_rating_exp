@@ -1,4 +1,4 @@
----
+ ---
 title: "pilot.analysis"
 output: html_document
 date: "2024-11-20"
@@ -457,10 +457,6 @@ merged_data <- left_join(
 )
 
 
-merged_data <- merged_data %>%
-  arrange(as.numeric(image))
-
-
 
 
 # Identify rows in `avg_ratings_across_politician` that did not find a match
@@ -470,7 +466,18 @@ unmatched_rows <- anti_join(
   by = c("male_politician_image" = "Male_Images")
 )
 
+
+merged_data <- merged_data %>%
+  arrange(as.numeric(image))
+
+
+head(merged_data)
+glimpse(merged_data)
+
+
+
 merged_data <- merged_data %>% select(-photo_source)
+
 merged_data <- merged_data %>% select(image, male_politician_image, convicted, Corruptible, Genuine, Attractive, Dominant, everything())
 
 # Write the resulting dataframe to a CSV file
@@ -478,96 +485,4 @@ write.csv(merged_data, "cleaned.csv", row.names = FALSE)
 
 
 
-head(merged_data)
-glimpse(merged_data)
 
-```
-
-```{r}
-# Function to perform logistic regression for a specific trait
-```
-
-```{r}
-run_regression <- function(trait) {
-  
-  # Filter the dataset for the specified trait
-  data_filtered <- merged_data %>%
-    filter(trait == !!trait)  # Filter rows where `trait` matches the input
-  
-  
-  # Fit the logistic regression model
-  model <- glm(corruption_record ~ avg_rating + age + glasses + beard + mustache + pixels 
-               + AU06 + AU12 + happiness, data = data_filtered, family = "binomial")
-  
-  # ask Yufei what about color of hair and clothing, as well as the source of the photos (whether source is used in female politicians)
-  
-  # Return the model summary
-  cat("\n===== MODEL SUMMARY FOR TRAIT:", trait, "=====\n")
-  print(summary(model))
-}
-```
-
-```{r}
-
-  # Fit the logistic regression model
-  model <- glm(corruption_record ~ avg_rating + trait + age + glasses + beard + mustache + pixels 
-               + AU06 + AU12 + happiness, data = merged_data, family = "binomial")
-  
-  print(summary(model))
-}
-
-
-```
-
-#### Model results
-
-```{r}
-corruptible_model <- run_regression("Corruptible")
-genuine_result <- run_regression("Genuine")
- attractive_result <- run_regression("Attractive")
- dominant_result <- run_regression("Dominant")
-
-
-
-
-```
-
-```{r}
-wide_data <- merged_data %>%
-  pivot_wider(
-    names_from = trait,      # Create new columns from `trait`
-    values_from = avg_rating # Fill these columns with `avg_rating`
-  )
-```
-
-```{r}
-print(dim(wide_data))
-head(wide_data)
-```
-
-```{r}
-
-  # Fit the logistic regression model
-  #model <- glm(corruption_record ~Attractive+ Corruptible+ Dominant+Genuine + age + glasses + beard + mustache + pixels 
-   #            + AU06 + AU12 + happiness, data = wide_data, family = "binomial")
-
-print(cor.test(wide_data$Corruptible,wide_data$Attractive))
-print(cor.test(wide_data$Corruptible,wide_data$Dominant))
-print(cor.test(wide_data$Corruptible,wide_data$Genuine))
-
-  
-```
-
-```{r}
-wide_data[1,14]+1
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

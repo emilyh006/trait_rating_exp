@@ -1,7 +1,7 @@
 ---
-title: "h1a_h1c_analysis"
+title: "Asia Participant Analysis"
 output: html_document
-date: "2024-11-27"
+date: "`r Sys.Date()`"
 ---
 
 ```{r setup, include=FALSE}
@@ -26,10 +26,6 @@ We expect that the association between corruptible looks and corruption records 
 
 We expect that the association between face perception and corruption records will be significant for corruptibility-related traits (e.g., corruptible, genuine) but not for corruptibility-unrelated traits (e.g., attractiveness).
 
-## Focus
-
-This analysis report will include the analysis for **H1a** and **parts of H1c**. Since H1c builds upon H1a by extending the t-test analysis to related (Genuine) and unrelated traits (Attractive & Dominant), we will include the relevant analysis and tests of H1c together with H1a in this report to avoid redundancy.
-
 ------------------------------------------------------------------------
 
 # Testings for H1a
@@ -41,12 +37,16 @@ To test H1a, we will conduct an aggregate-level t-test for the rating of corrupt
 
 library(tidyverse)
 library(dplyr)
+library(minqa)
+library(nloptr)
+library(RcppEigen)
+library(lme4)
 ```
 
 ```{r}
 #Load the clean data set
 
-dat <- read.csv("cleaned.csv")
+dat <- read.csv("asia_cleaned.csv")
 ```
 
 # Dataset Overview
@@ -57,7 +57,7 @@ The dataset `cleaned.csv` contains information about politicians and their ratin
     -   `1`: Politician has a corruption record.
     -   `0`: Politician has no corruption record.
 -   **`Corruptible`**, **`Genuine`**, **`Attractive`**, **`Dominant`**: Numeric values reflecting the average trait ratings for each politician across every participants.
--   The rest of the variables are not applicable for H1a analysis.
+-   **`wiki`**, **`gov`**, **`news`**: Binary variables indicating the sources of the stimuli/images of the politicians
 
 ------------------------------------------------------------------------
 
@@ -122,8 +122,69 @@ genuine_t_test <- analyze_trait("Genuine")
 
 ```{r}
 attractive_t_test <- analyze_trait("Attractive")
+```
 
 ## Dominant
 
+```{r}
 dominant_t_test <- analyze_trait("Dominant")
 ```
+
+# Testings for H1b
+
+To test H1b, we will conduct an aggregate-level logistic regression. The cleaned data will include the average rating of all four traits for a given politician across all participants. We will regress the politicians’ records (corrupt or clean) on their average corruptibility ratings while controlling for photo characteristics that may influence corruptibility perception such as the politician’s age, image clarity, image sources, smile intensity, with or without glasses and jewelry, and hair and clothing colors, etc.
+
+## Function Definition: **`run_regression`**
+
+We define a function `run_regression` to:
+
+-   Compute t-tests for specified traits.
+-   Dynamically handle the trait type for the regression formula
+
+```{r}
+run_regression <- function(trait) {
+  
+  # Dynamically add the trait column to the model
+  formula <- as.formula(paste("convicted ~", trait, "+ wiki + gov + news + age + glasses + beard + mustache + 
+                               hair_blond + hair_white + hair_black + hair_brown + pixels + AU06 + AU12 + 
+                               clothing_r + clothing_g + clothing_b"))
+  
+  # Fit the logistic regression model
+  model <- glm(formula, data = dat, family = "binomial")
+
+  # Return the model summary
+  cat("\n===== MODEL SUMMARY FOR TRAIT:", trait, "=====\n")
+  print(summary(model))
+}
+```
+
+# H1b: Regression for Corruptibility
+
+```{r}
+corruptible_model <- run_regression("Corruptible")
+```
+
+# H1c: Regression for Other Traits
+
+## Genuine
+
+```{r}
+genuine_result <- run_regression("Genuine")
+```
+
+## Attractive
+
+```{r}
+attractive_result <- run_regression("Attractive")
+```
+
+## Dominant
+
+```{r}
+dominant_result <- run_regression("Dominant")
+```
+```{r}
+sessionInfo()
+```
+
+
